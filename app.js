@@ -57,6 +57,89 @@ const jwt = require("jsonwebtoken");
 
 app.use(logger('dev')); //using the HTTP logger library
 
+
+app.put('/users/disable', async (req, res) => {
+    try {
+        let header = req.header('Authorization')
+        const token = header !== undefined ? header.split('Bearer ')[1] : undefined;
+
+        if (token !== undefined) {
+            const decoded = jwt.verify(token, 'secret_key', verifyOptions)
+            if (decoded.isAdmin) {
+                const email = req.body.email
+                await db.collection(userCollection)
+                    .where("email", "==", email)
+                    .get().then(async (querySnapshot) => {
+                        let docs = querySnapshot.docs
+                        for (let doc of docs) {
+                            await doc.ref.update({isDisabled: !doc.data().isDisabled})
+                        }
+                    });
+                return res.status(204).send({
+                    message: 'User updated successfully.',
+                    isError: false
+                })
+            } else {
+                return res.status(500).send({
+                    message: 'API Secured, user not allowed.',
+                    isError: true
+                });
+            }
+        } else {
+            return res.status(500).send({
+                message: 'Missing Authorization Header',
+                isError: true
+            });
+        }
+    } catch (err) {
+        return res.status(500).send({
+            message: 'Internal Server Error',
+            isError: true
+        });
+    }
+})
+
+app.put('/users/admin', async (req, res) => {
+    try {
+        let header = req.header('Authorization')
+        const token = header !== undefined ? header.split('Bearer ')[1] : undefined;
+
+        if (token !== undefined) {
+            const decoded = jwt.verify(token, 'secret_key', verifyOptions)
+            if (decoded.isAdmin) {
+                const email = req.body.email
+                await db.collection(userCollection)
+                    .where("email", "==", email)
+                    .get().then(async (querySnapshot) => {
+                        let docs = querySnapshot.docs
+                        for (let doc of docs) {
+                            await doc.ref.update({isAdmin: !doc.data().isAdmin})
+                        }
+                    });
+                return res.status(204).send({
+                    message: 'User updated successfully.',
+                    isError: false
+                })
+            } else {
+                return res.status(500).send({
+                    message: 'API Secured, user not allowed.',
+                    isError: true
+                });
+            }
+        } else {
+            return res.status(500).send({
+                message: 'Missing Authorization Header',
+                isError: true
+            });
+        }
+    } catch (err) {
+        return res.status(500).send({
+            message: 'Internal Server Error',
+            isError: true
+        });
+    }
+})
+
 app.get('/users', async (req, res) => {
     try {
         let header = req.header('Authorization')
@@ -153,7 +236,12 @@ app.post('/login', async (req, res) => {
         let found = false;
         for (let doc of docs) {
             const user = doc.data();
-
+            if (user.isDisabled) {
+                return res.status(500).send({
+                    message: 'User is blocked',
+                    isError: true
+                })
+            }
             if (user.email === loginUser.email) {
                 found = true;
                 console.log(user.password, loginUser.password);
