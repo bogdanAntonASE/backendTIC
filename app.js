@@ -8,6 +8,10 @@ admin.initializeApp( {
     credential: admin.credential.cert(serviceAccountKey)
 });
 
+const Chance = require('chance');
+const chance = Chance()
+let name = chance.name();
+
 const i = 'jwt-node'
 const s = 'jwt-node'
 const a = 'jwt-node'
@@ -34,6 +38,105 @@ const carsCollection = 'cars';
 const acquisitionsCollection = 'acquisitions';
 const express = require('express');
 const bodyParser = require('body-parser')
+const bcrypt = require("bcrypt");
+
+
+/*const createUsers = async () => {
+
+    for (let i = 0; i < 1000; i++) {
+        let fullname = chance.name();
+        let email = fullname.toLowerCase().replace(' ', '.') + '@gmail.com';
+
+        bcrypt.genSalt(10, function(err, salt) {
+            bcrypt.hash('Test1234', salt, async function (err, hash) {
+                let user = {
+                    fullname: fullname,
+                    email: email,
+                    isAdmin: false,
+                    isDisabled: false,
+                    password: hash,
+                    country: chance.pickone(['RO', 'MD'])
+                }
+                await db.collection(userCollection).add(user)
+            })
+        })
+    }
+}*/
+
+/*const createCar = async () => {
+    for (let i = 0; i < 1000; i++) {
+        let brand = chance.pickone(['Opel', 'Dacia', 'Volvo', 'BMW', 'Audi'])
+        let modelName = '';
+        let hp = 0;
+        let price = 0;
+        let engineCapacity = 0;
+        switch (brand) {
+            case 'Opel':
+                modelName = chance.pickone(['Astra', 'Zafira', 'Mokka', 'Vectra', 'Corsa'])
+                hp = chance.pickone([90, 100, 105, 110, 125, 150])
+                price = chance.pickone([10000, 12500, 15000, 17500])
+                engineCapacity = chance.pickone([1000, 1200, 1400, 1600, 1800])
+                break;
+            case 'Dacia':
+                modelName = chance.pickone(['Logdan', 'Duster', 'Lodgy', 'Spring', 'Sandero'])
+                hp = chance.pickone([90, 100, 105, 110, 120])
+                price = chance.pickone([10000, 12500, 15000, 17500])
+                engineCapacity = chance.pickone([900, 1000, 1200, 1400, 1600])
+                break;
+            case 'Volvo':
+                modelName = chance.pickone(['S60', 'V60', 'S90', 'V90', 'V40'])
+                hp = chance.pickone([110, 120, 150, 175, 200])
+                price = chance.pickone([20000, 25000, 30000, 35000])
+                engineCapacity = chance.pickone([1400, 1600, 1800, 2000])
+                break;
+            case 'BMW':
+                modelName = chance.pickone(['Series 1', 'Series 3', 'Series 5', 'X3', 'X5'])
+                hp = chance.pickone([150, 175, 200, 250])
+                price = chance.pickone([35000, 40000, 45000, 50000])
+                engineCapacity = chance.pickone([1800, 2000, 2200, 3000])
+                break;
+            case 'Audi':
+                modelName = chance.pickone(['A4', 'A6', 'A8', 'Q5', 'Q8'])
+                hp = chance.pickone([150, 175, 200, 250])
+                price = chance.pickone([35000, 40000, 45000, 50000])
+                engineCapacity = chance.pickone([1800, 2000, 2200, 3000])
+                break;
+        }
+        let manufacturingYear = chance.integer({min: 2018, max: 2022})
+
+        let found = false;
+        await db.collection(carsCollection).where('brand', '==', brand)
+            .where('engineCapacity', '==', engineCapacity)
+            .where('hp', '==', hp)
+            .where('manufacturingYear', '==', manufacturingYear)
+            .where('modelName', '==', modelName)
+            .where('price', '==', price)
+            .get().then(async (querySnapshot) => {
+                let docs = querySnapshot.docs
+                for (let doc of docs) {
+                    found = true;
+                    console.log(doc.data())
+                    await doc.ref.update({quantity: doc.data().quantity + 1});
+                }
+            })
+
+        console.log(found);
+        if (!found) {
+            await db.collection(carsCollection).add({
+                brand: brand.toString(),
+                engineCapacity: engineCapacity.toString(),
+                hp: hp.toString(),
+                manufacturingYear: manufacturingYear.toString(),
+                modelName: modelName.toString(),
+                price: price.toString(),
+                quantity: 1
+            });
+        }
+    }
+}*/
+
+//createCar();
+//createUsers();
 
 const app = express();
 const main = express();
@@ -47,7 +150,6 @@ app.use(cors());
 app.use(bodyParser.json())
 
 const port = 3000;
-const bcrypt = require('bcrypt');
 const saltRounds = 10;
 
 main.use(contextPath, app);
@@ -178,6 +280,72 @@ app.get('/users', async (req, res) => {
         });
     }
 });
+
+app.get('/acquisitions', async (req, res) => {
+    try {
+        let header = req.header('Authorization')
+        const token = header !== undefined ? header.split('Bearer ')[1] : undefined;
+
+        if (token !== undefined) {
+            const decoded = jwt.verify(token, 'secret_key', verifyOptions)
+            if (decoded.isAdmin) {
+                const acquisitionResponseArray = [];
+                await db.collection(acquisitionsCollection).get()
+                    .then(async (querySnapshot) => {
+                        const docs = querySnapshot.docs;
+                        for (let doc of docs) {
+                            const acquisition = doc.data();
+                            let acquisitionResponse = {
+                                fullname: '',
+                                email: '',
+                                cars: [],
+                                price: '',
+                                date: ''
+                            }
+
+                            acquisitionResponse.cars = acquisitionResponse.cars.concat(acquisition.cars)
+                            console.log(acquisitionResponse);
+                            acquisitionResponse.price = acquisition.price
+                            acquisitionResponse.date = new Date(acquisition.date).toLocaleDateString("en-US");
+                            await db.collection(userCollection)
+                                .where('email', '==', acquisition.email)
+                                .get().then((innerQuery) => {
+                                    const innerDocs = innerQuery.docs;
+
+                                    for (let innerDoc of innerDocs) {
+                                        let user = innerDoc.data()
+                                        acquisitionResponse.fullname = user.fullname
+                                        acquisitionResponse.email = user.email
+                                    }
+                                })
+
+                            acquisitionResponseArray.push(acquisitionResponse);
+                        }
+                    })
+
+                return res.status(200).send({
+                    message: acquisitionResponseArray,
+                    isError: false
+                })
+            }else {
+                return res.status(500).send({
+                    message: 'API Secured, user not allowed.',
+                    isError: true
+                });
+            }
+        } else {
+            return res.status(500).send({
+                message: 'Missing Authorization Header',
+                isError: true
+            });
+        }
+    } catch (err) {
+        return res.status(500).send({
+            message: 'Internal Server Error',
+            isError: true
+        });
+    }
+})
 
 app.post('/register', (req, res) => {
     let userToAdd = req.body
@@ -547,7 +715,7 @@ app.post('/cart', jsonParser, async (req, res) => {
                     }).catch(err => {
                         console.log(err)
                         return res.status(500).send({
-                            message: 'Acquisition failed',
+                            message: 'Acquisition failed, user not found',
                             isError: true
                         })
                     })
@@ -565,9 +733,9 @@ app.post('/cart', jsonParser, async (req, res) => {
                             let docs = querySnapshot.docs;
 
                             for (let doc of docs) {
-                                if (car.quantity >= doc.data().quantity) {
+                                if (car.quantity > doc.data().quantity) {
                                     return res.status(500).send({
-                                        message: 'Acquisition failed',
+                                        message: 'Acquisition failed, not enough quantity for car ' + car.brand + ' ' + car.modelName,
                                         isError: true
                                     })
                                 } else {
