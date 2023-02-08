@@ -8,9 +8,8 @@ admin.initializeApp( {
     credential: admin.credential.cert(serviceAccountKey)
 });
 
-const Chance = require('chance');
-const chance = Chance()
-let name = chance.name();
+//const Chance = require('chance');
+//const chance = Chance();
 
 const i = 'jwt-node'
 const s = 'jwt-node'
@@ -43,7 +42,7 @@ const bcrypt = require("bcrypt");
 
 /*const createUsers = async () => {
 
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0; i < 50; i++) {
         let fullname = chance.name();
         let email = fullname.toLowerCase().replace(' ', '.') + '@gmail.com';
 
@@ -61,10 +60,10 @@ const bcrypt = require("bcrypt");
             })
         })
     }
-}*/
+}
 
-/*const createCar = async () => {
-    for (let i = 0; i < 1000; i++) {
+const createCar = async () => {
+    for (let i = 0; i < 50; i++) {
         let brand = chance.pickone(['Opel', 'Dacia', 'Volvo', 'BMW', 'Audi'])
         let modelName = '';
         let hp = 0;
@@ -133,10 +132,10 @@ const bcrypt = require("bcrypt");
             });
         }
     }
-}*/
+}
 
-//createCar();
-//createUsers();
+createCar();
+createUsers();*/
 
 const app = express();
 const main = express();
@@ -304,7 +303,6 @@ app.get('/acquisitions', async (req, res) => {
                             }
 
                             acquisitionResponse.cars = acquisitionResponse.cars.concat(acquisition.cars)
-                            console.log(acquisitionResponse);
                             acquisitionResponse.price = acquisition.price
                             acquisitionResponse.date = new Date(acquisition.date).toLocaleDateString("en-US");
                             await db.collection(userCollection)
@@ -404,15 +402,15 @@ app.post('/login', async (req, res) => {
         let found = false;
         for (let doc of docs) {
             const user = doc.data();
-            if (user.isDisabled) {
-                return res.status(500).send({
-                    message: 'User is blocked',
-                    isError: true
-                })
-            }
+
             if (user.email === loginUser.email) {
                 found = true;
-                console.log(user.password, loginUser.password);
+                if (user.isDisabled) {
+                    return res.status(500).send({
+                        message: 'User is blocked',
+                        isError: true
+                    })
+                }
                 if (await bcrypt.compare(loginUser.password, user.password)) {
                     let data = {
                         time: Date(),
@@ -420,7 +418,6 @@ app.post('/login', async (req, res) => {
                         email: user.email
                     }
                     token = jwt.sign(data, 'secret_key', options);
-                    console.log('here')
                     return res.status(200).json({
                         message: 'Login successful.',
                         jwtToken: token,
@@ -442,7 +439,6 @@ app.post('/login', async (req, res) => {
             })
         }
     }).catch((err) => {
-        console.log(err)
         return res.status(500).send({
             message: 'User not present in database.',
             isError: true
@@ -484,7 +480,6 @@ app.get('/cars', async (req, res) => {
             })
         }
     } catch (err) {
-        console.log(err)
         return res.status(500).send({
             message: 'You are not logged in.',
             isError: true
@@ -493,8 +488,7 @@ app.get('/cars', async (req, res) => {
 })
 
 const carEquals = (car, carToBeCompared) => {
-    console.log(car)
-    console.log(carToBeCompared)
+
     return ((car.brand.toString() === carToBeCompared.brand.toString())
             && (car.modelName.toString() === carToBeCompared.modelName.toString())
             && (parseInt(car.engineCapacity) === parseInt(carToBeCompared.engineCapacity))
@@ -504,12 +498,31 @@ const carEquals = (car, carToBeCompared) => {
 }
 
 const editCar = (oldCar, newCar) => {
-    oldCar.brand = newCar.brand
-    oldCar.modelName = newCar.modelName
-    oldCar.engineCapacity = newCar.engineCapacity
-    oldCar.hp = newCar.hp
-    oldCar.manufacturingYear = newCar.manufacturingYear
-    oldCar.price = newCar.price
+    let editedProperties = {};
+
+    if (oldCar.brand.toString() !== newCar.brand.toString()) {
+        editedProperties.brand = newCar.brand.toString()
+    }
+    if (oldCar.modelName.toString() !== newCar.modelName.toString()) {
+        editedProperties.modelName = newCar.modelName.toString()
+    }
+    if (oldCar.engineCapacity.toString() !== newCar.engineCapacity.toString()) {
+        editedProperties.engineCapacity = newCar.engineCapacity.toString()
+    }
+    if (oldCar.hp.toString() !== newCar.hp.toString()) {
+        editedProperties.hp = newCar.hp.toString()
+    }
+    if (oldCar.manufacturingYear.toString() !== newCar.manufacturingYear.toString()) {
+        editedProperties.manufacturingYear = newCar.manufacturingYear.toString()
+    }
+    if (oldCar.price.toString() !== newCar.price.toString()) {
+        editedProperties.price = newCar.price.toString()
+    }
+
+    if (Object.keys(editedProperties).length === 0) {
+        return null;
+    }
+    return editedProperties;
 }
 
 app.post('/cars', jsonParser, async (req, res) => {
@@ -531,12 +544,10 @@ app.post('/cars', jsonParser, async (req, res) => {
                         let docs = querySnapshot.docs
                         for (let doc of docs) {
                             found = true;
-                            console.log(doc.data())
                             await doc.ref.update({quantity: doc.data().quantity + 1});
                         }
                     })
 
-                console.log(found);
                 if (!found) {
                     await db.collection(carsCollection).add(newCar);
                 }
@@ -557,7 +568,6 @@ app.post('/cars', jsonParser, async (req, res) => {
             })
         }
     } catch (err) {
-        console.log(err)
         return res.status(500).send({
             message: 'You are not logged in.',
             isError: true
@@ -582,23 +592,20 @@ app.put('/cars', jsonParser, async (req, res) => {
                         const isEqual = carEquals(car, oldItem)
 
                         if (isEqual) {
-                            editCar(car, newItem)
-                            console.log(car)
+                            let editedProperties = editCar(car, newItem)
 
-                            if (!wasCarEdited) {
+                            if (!wasCarEdited && editedProperties !== null) {
                                 await db.collection(carsCollection)
                                     .doc(doc.id)
-                                    .update(newItem)
-                                    .then(innerRes => {
-                                        console.log(innerRes)
+                                    .update(editedProperties)
+                                    .then(() => {
                                         wasCarEdited = true;
 
                                         return res.status(204).send({
                                             message: 'Car updated successfully.',
                                             isError: false
                                         })
-                                    }).catch(err => {
-                                        console.log(err)
+                                    }).catch(() => {
                                         return res.status(500).send({
                                             message: 'Could not edit car',
                                             isError: true
@@ -627,7 +634,6 @@ app.put('/cars', jsonParser, async (req, res) => {
             })
         }
     } catch (err) {
-        console.log(err)
         return res.status(500).send({
             message: 'You are not logged in.',
             isError: true
@@ -638,14 +644,12 @@ app.put('/cars', jsonParser, async (req, res) => {
 app.delete('/cars', jsonParser, async (req, res) => {
     try {
         let header = req.header('Authorization')
-        console.log(header);
         const token = header !== undefined ? header.split('Bearer ')[1] : undefined;
         if (token !== undefined) {
             const decoded = jwt.verify(token, 'secret_key', verifyOptions)
             if (decoded) {
                 const carToBeDeleted = req.body.key
 
-                console.log(carToBeDeleted)
                 db.collection(carsCollection).where('brand', '==', carToBeDeleted.brand.toString())
                     .where('engineCapacity', '==', carToBeDeleted.engineCapacity.toString())
                     .where('hp', '==', carToBeDeleted.hp.toString())
@@ -656,11 +660,9 @@ app.delete('/cars', jsonParser, async (req, res) => {
                     .get().then(async (querySnapshot) => {
                     let docs = querySnapshot.docs
                     for (let doc of docs) {
-                        console.log(doc.data())
                         await doc.ref.delete();
                     }
                 }).catch(err => {
-                    console.log(err)
                     return res.status(500).send({
                         message: 'Delete failed',
                         isError: true
@@ -683,7 +685,6 @@ app.delete('/cars', jsonParser, async (req, res) => {
             })
         }
     } catch (err) {
-        console.log(err)
         return res.status(500).send({
             message: 'You are not logged in.',
             isError: true
@@ -694,7 +695,6 @@ app.delete('/cars', jsonParser, async (req, res) => {
 app.post('/cart', jsonParser, async (req, res) => {
     try {
         let header = req.header('Authorization')
-        console.log(header);
         const token = header !== undefined ? header.split('Bearer ')[1] : undefined;
         if (token !== undefined) {
             const decoded = jwt.verify(token, 'secret_key', verifyOptions)
@@ -713,14 +713,11 @@ app.post('/cart', jsonParser, async (req, res) => {
                             user = doc.data()
                         }
                     }).catch(err => {
-                        console.log(err)
                         return res.status(500).send({
                             message: 'Acquisition failed, user not found',
                             isError: true
                         })
                     })
-
-                    console.log(car);
 
                     await db.collection(carsCollection).where('brand', '==', car.brand.toString())
                         .where('engineCapacity', '==', car.engineCapacity.toString())
@@ -753,7 +750,6 @@ app.post('/cart', jsonParser, async (req, res) => {
                                 }
                             }
                         }).catch(err => {
-                            console.log(err)
                             return res.status(500).send({
                                 message: 'Acquisition failed',
                                 isError: true
@@ -787,7 +783,6 @@ app.post('/cart', jsonParser, async (req, res) => {
             })
         }
     } catch (err) {
-        console.log(err)
         return res.status(500).send({
             message: 'You are not logged in.',
             isError: true
