@@ -2,7 +2,7 @@
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 // Initialize Firebase
 const admin = require('firebase-admin');
-const serviceAccountKey = require('./serviceAccountKey.json');
+const serviceAccountKey = require('/etc/secrets/serviceAccountKey.json');
 
 admin.initializeApp( {
     credential: admin.credential.cert(serviceAccountKey)
